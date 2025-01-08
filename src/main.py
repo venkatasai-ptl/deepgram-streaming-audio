@@ -8,7 +8,8 @@ DEEPGRAM_API_KEY = '916d021522ce7663133b4387d7b6cd37f367fb67'
 def main():
     try:
         deepgram = DeepgramClient(DEEPGRAM_API_KEY)
-        dg_connection = deepgram.listen.websocket()
+        dg_connection = deepgram.transcription.live()
+
 
         # Listen for any transcripts received from Deepgram and write them to the console
         def on_message(self, result, **kwargs):

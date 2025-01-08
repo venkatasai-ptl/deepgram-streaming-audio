@@ -3,12 +3,12 @@ import pyaudio
 import threading
 
 # The API key you created in step 1
-DEEPGRAM_API_KEY = '5068995718d38dbe230909ce1a989e3365dd8804'
+DEEPGRAM_API_KEY = '916d021522ce7663133b4387d7b6cd37f367fb67'
 
 def main():
     try:
         deepgram = DeepgramClient(DEEPGRAM_API_KEY)
-        dg_connection = deepgram.listen.live.v('1')
+        dg_connection = deepgram.listen.websocket()
 
         # Listen for any transcripts received from Deepgram and write them to the console
         def on_message(self, result, **kwargs):

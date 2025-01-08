@@ -1,76 +1,50 @@
-from deepgram import DeepgramClient, DeepgramClientOptions, LiveTranscriptionEvents, LiveOptions
+from deepgram import Deepgram
 import pyaudio
-import threading
+import asyncio
 
-# The API key you created in step 1
+# Your Deepgram API Key
 DEEPGRAM_API_KEY = '916d021522ce7663133b4387d7b6cd37f367fb67'
 
-def main():
-    try:
-        deepgram = DeepgramClient(DEEPGRAM_API_KEY)
-        dg_connection = deepgram.transcription.live()
+async def main():
+    # Initialize the Deepgram SDK
+    deepgram = Deepgram(DEEPGRAM_API_KEY)
 
+    # Define the transcription handler
+    async def process_transcription(transcription):
+        if transcription.get('channel') and transcription['channel'].get('alternatives'):
+            transcript = transcription['channel']['alternatives'][0].get('transcript', '')
+            if transcript:
+                print(f"Transcript: {transcript}")
 
-        # Listen for any transcripts received from Deepgram and write them to the console
-        def on_message(self, result, **kwargs):
-            sentence = result.channel.alternatives[0].transcript
-            if len(sentence) == 0:
-                return
-            print(f'transcript: {sentence}')
+    # Start the WebSocket connection
+    options = {
+        "punctuate": True,
+        "model": "nova",
+        "language": "en-IN"
+    }
 
-        dg_connection.on(LiveTranscriptionEvents.Transcript, on_message)
+    # Open microphone stream
+    p = pyaudio.PyAudio()
+    stream = p.open(
+        format=pyaudio.paInt16,
+        channels=1,
+        rate=16000,
+        input=True,
+        frames_per_buffer=1024
+    )
 
-        # Create a websocket connection to Deepgram
-        options = LiveOptions(
-            smart_format=True, model="nova-2", language="en-IN"
-        )
-        dg_connection.start(options)
+    async with deepgram.transcription.live(process_transcription, options=options) as dg_socket:
+        print("Microphone streaming to Deepgram. Press Ctrl+C to stop.")
+        try:
+            while True:
+                data = stream.read(1024, exception_on_overflow=False)
+                await dg_socket.send(data)
+        except KeyboardInterrupt:
+            print("Stopped by user.")
+        finally:
+            stream.stop_stream()
+            stream.close()
+            p.terminate()
 
-        lock_exit = threading.Lock()
-        exit = False
-
-        # Listen for the connection to open and send streaming audio from the microphone to Deepgram
-        def myThread():
-            p = pyaudio.PyAudio()
-            stream = p.open(
-                format=pyaudio.paInt16,  # 16-bit audio format
-                channels=1,  # Mono audio
-                rate=16000,  # Sampling rate
-                input=True,  # Specify that this is an input stream
-                frames_per_buffer=1024  # Size of each audio chunk
-            )
-
-            try:
-                while True:
-                    audio_data = stream.read(1024, exception_on_overflow=False)
-                    lock_exit.acquire()
-                    if exit:
-                        break
-                    lock_exit.release()
-
-                    dg_connection.send(audio_data)
-            finally:
-                stream.stop_stream()
-                stream.close()
-                p.terminate()
-
-        myMic = threading.Thread(target=myThread)
-        myMic.start()
-
-        input('Press Enter to stop transcription...\n')
-        lock_exit.acquire()
-        exit = True
-        lock_exit.release()
-
-        myMic.join()
-
-        # Indicate that we've finished by sending the close stream message
-        dg_connection.finish()
-        print('Finished')
-
-    except Exception as e:
-        print(f'Could not open socket: {e}')
-        return
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    asyncio.run(main())
